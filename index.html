@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Групповой Чат</title>
+  <title>Multi-User Chat</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     :root {
       --primary: #4285F4;
-      --secondary: #34A853;
       --my-message: #DCF8C6;
       --other-message: #FFFFFF;
       --text-dark: #333333;
@@ -144,18 +143,27 @@
       animation: fadeOut 0.5s ease forwards;
     }
 
-    /* Полоса прокрутки */
-    .messages-container::-webkit-scrollbar {
-      width: 6px;
+    .auth-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(66, 133, 244, 0.9);
+      z-index: 1000;
     }
 
-    .messages-container::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-
-    .messages-container::-webkit-scrollbar-thumb {
-      background: #888;
-      border-radius: 3px;
+    .auth-box {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
   </style>
 </head>
@@ -177,11 +185,15 @@
     </div>
   </div>
 
-  <div id="authOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:rgba(66, 133, 244, 0.9);">
-    <div style="background:white;padding:30px;border-radius:10px;width:90%;max-width:400px;text-align:center;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+  <div class="auth-container" id="authContainer">
+    <div class="auth-box">
       <h2 style="color:#4285F4;margin-bottom:20px;">Вход в чат</h2>
-      <input type="text" id="usernameInput" placeholder="Ваше имя" style="width:100%;padding:12px 15px;margin-bottom:15px;border:1px solid #ddd;border-radius:24px;font-size:1rem;outline:none;">
-      <button id="loginBtn" style="width:100%;padding:12px;background:#4285F4;color:white;border:none;border-radius:24px;cursor:pointer;font-size:1rem;transition:background 0.2s;">Войти</button>
+      <input type="text" id="usernameInput" placeholder="Ваше имя" 
+             style="width:100%;padding:12px 15px;margin-bottom:15px;border:1px solid #ddd;border-radius:24px;font-size:1rem;outline:none;">
+      <button id="loginBtn" 
+              style="width:100%;padding:12px;background:#4285F4;color:white;border:none;border-radius:24px;cursor:pointer;font-size:1rem;">
+        Войти
+      </button>
     </div>
   </div>
 
@@ -194,7 +206,7 @@
       authDomain: "textchattu.firebaseapp.com",
       databaseURL: "https://textchattu-default-rtdb.firebaseio.com",
       projectId: "textchattu",
-      storageBucket: "textchattu.firebasestorage.app",
+      storageBucket: "textchattu.appspot.com",
       messagingSenderId: "200660975016",
       appId: "1:200660975016:web:0777dc361c70162bca319d"
     };
@@ -203,7 +215,7 @@
     const database = getDatabase(app);
 
     // DOM элементы
-    const authOverlay = document.getElementById('authOverlay');
+    const authContainer = document.getElementById('authContainer');
     const chatContainer = document.getElementById('chatContainer');
     const usernameInput = document.getElementById('usernameInput');
     const loginBtn = document.getElementById('loginBtn');
@@ -218,11 +230,8 @@
 
     // Инициализация
     function init() {
-      const savedUsername = localStorage.getItem('chatUsername');
-      if (savedUsername) {
-        username = savedUsername;
-        startChat();
-      }
+      // Показываем окно входа при каждой новой вкладке
+      showAuthScreen();
       
       loginBtn.addEventListener('click', handleLogin);
       usernameInput.addEventListener('keypress', (e) => {
@@ -239,6 +248,19 @@
       });
     }
 
+    function showAuthScreen() {
+      authContainer.style.display = 'flex';
+      chatContainer.style.display = 'none';
+      usernameInput.value = '';
+      usernameInput.focus();
+    }
+
+    function showChatScreen() {
+      authContainer.style.display = 'none';
+      chatContainer.style.display = 'flex';
+      messageInput.focus();
+    }
+
     function handleLogin() {
       const inputUsername = usernameInput.value.trim();
       if (!inputUsername) {
@@ -247,37 +269,39 @@
       }
       
       username = inputUsername;
-      localStorage.setItem('chatUsername', username);
+      currentUsername.textContent = username;
       startChat();
+      showChatScreen();
+    }
+
+    function handleLogout() {
+      username = '';
+      messagesContainer.innerHTML = '';
+      showAuthScreen();
     }
 
     function startChat() {
-      currentUsername.textContent = username;
-      authOverlay.style.display = 'none';
-      chatContainer.style.display = 'flex';
-      
       messagesRef = ref(database, 'messages');
       
-      // Загружаем все существующие сообщения при подключении
+      // Загружаем историю сообщений
       onValue(messagesRef, (snapshot) => {
-        messagesContainer.innerHTML = ''; // Очищаем перед загрузкой
-        
+        messagesContainer.innerHTML = '';
         const messages = snapshot.val();
         if (messages) {
-          Object.values(messages).forEach(message => {
-            addMessage(message, message.userId === username);
+          Object.values(messages).forEach(msg => {
+            addMessageToChat(msg, msg.userId === username);
           });
           scrollToBottom();
         }
       }, { onlyOnce: true });
-      
+
       // Слушаем новые сообщения
       onChildAdded(messagesRef, (snapshot) => {
         const message = snapshot.val();
-        addMessage(message, message.userId === username);
+        addMessageToChat(message, message.userId === username);
         scrollToBottom();
       });
-      
+
       // Слушаем удаленные сообщения
       onChildRemoved(messagesRef, (snapshot) => {
         const messageId = snapshot.key;
@@ -287,17 +311,6 @@
           setTimeout(() => messageElement.remove(), 500);
         }
       });
-      
-      messageInput.focus();
-    }
-
-    function handleLogout() {
-      username = '';
-      localStorage.removeItem('chatUsername');
-      messagesContainer.innerHTML = '';
-      authOverlay.style.display = 'flex';
-      chatContainer.style.display = 'none';
-      usernameInput.focus();
     }
 
     function sendMessage() {
@@ -312,9 +325,11 @@
         timestamp: Date.now()
       };
       
+      // Очищаем поле ввода сразу после отправки
+      messageInput.value = '';
+      
       set(ref(database, `messages/${message.id}`), message)
         .then(() => {
-          messageInput.value = '';
           // Удаляем сообщение через 1 минуту
           setTimeout(() => {
             remove(ref(database, `messages/${message.id}`));
@@ -326,19 +341,19 @@
         });
     }
 
-    function addMessage(message, isMine) {
+    function addMessageToChat(message, isMyMessage) {
       if (document.getElementById(message.id)) return;
       
       const messageElement = document.createElement('div');
       messageElement.id = message.id;
-      messageElement.className = `message ${isMine ? 'my-message' : 'other-message'}`;
+      messageElement.className = `message ${isMyMessage ? 'my-message' : 'other-message'}`;
       
       const time = new Date(message.timestamp);
       const timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
       messageElement.innerHTML = `
         <div class="message-info">
-          <span class="sender-name">${isMine ? 'Вы' : message.sender}</span>
+          <span class="sender-name">${isMyMessage ? 'Вы' : message.sender}</span>
           <span class="message-time">${timeString}</span>
         </div>
         <div class="message-text">${message.text}</div>
