@@ -221,11 +221,13 @@
       
       messagesRef = ref(database, 'messages');
       
+      // Загружаем существующие сообщения
       onChildAdded(messagesRef, (snapshot) => {
         const message = snapshot.val();
         addMessage(message, message.userId === username);
       });
       
+      // Обрабатываем удаление сообщений
       onChildRemoved(messagesRef, (snapshot) => {
         const messageElement = document.getElementById(snapshot.key);
         if (messageElement) {
@@ -257,12 +259,14 @@
         timestamp: Date.now()
       };
       
+      // Отправляем сообщение в базу данных
       set(ref(database, `messages/${message.id}`), message)
         .then(() => {
           messageInput.value = '';
+          // Удаляем сообщение через 1 минуту
           setTimeout(() => {
             remove(ref(database, `messages/${message.id}`));
-          }, 60000); // Удаление через 1 минуту
+          }, 60000);
         });
     }
 
